@@ -3,12 +3,24 @@ import { api } from "./api.js";
 import { todayISO, validate } from "./validate.js";
 
 const EMPTY = { name: "", age: "", gender: "", ward: "", department: "", doctor: "", admission_date: "", status: "Admitted" };
-const NO_FILTERS = { search: "", ward: "", department: "", doctor: "" };
+const NO_FILTERS = { search: "", ward: "", department: "", doctor: "", status: "" };
+const AVATARS = [
+  ["#0e7490", "#22b8cf"], ["#4f46e5", "#818cf8"], ["#0f766e", "#2dd4bf"],
+  ["#be185d", "#f472b6"], ["#b45309", "#fbbf24"], ["#1d4ed8", "#60a5fa"],
+];
+const avatarStyle = (name) => {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 997;
+  const [a, b] = AVATARS[h % AVATARS.length];
+  return { background: `linear-gradient(135deg, ${a}, ${b})` };
+};
+const TODAY = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 const formatDate = (iso) => {
   const [y, m, d] = iso.split("-");
   return new Date(+y, +m - 1, +d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
+const pct = (n, t) => (t ? `${Math.round((n / t) * 100)}% of all patients` : "No patients yet");
 const initials = (name) => name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
 /* ------------------------------------------------------------ icons */
@@ -26,6 +38,7 @@ const ICONS = {
   logo: ["M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"],
   users: ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M23 21v-2a4 4 0 0 0-3-3.9", "M16 3.1a4 4 0 0 1 0 7.8"],
   bed: ["M2 18V6", "M2 14h20v4", "M22 14v-2a4 4 0 0 0-4-4h-8v6"],
+  cal: ["M3 6h18v15H3z", "M16 3v4", "M8 3v4", "M3 11h18"],
   out: ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "M16 17l5-5-5-5", "M21 12H9"],
 };
 
@@ -157,14 +170,32 @@ function RowActions({ p, onEdit, onDischarge, onDelete }) {
 
 const Status = ({ status }) => <span className={`pill ${status.toLowerCase()}`}><i />{status}</span>;
 
-function Stat({ icon, label, value, tone }) {
+function Stat({ icon, label, value, tone, hint }) {
   return (
     <div className={`stat ${tone}`}>
-      <div className="stat-icon"><Icon d={ICONS[icon]} size={20} /></div>
-      <div>
+      <div className="stat-icon"><Icon d={ICONS[icon]} size={22} /></div>
+      <div className="stat-text">
         <div className="stat-value">{value ?? "–"}</div>
         <div className="stat-label">{label}</div>
+        {hint && <div className="stat-hint">{hint}</div>}
       </div>
+    </div>
+  );
+}
+
+function Tabs({ value, onChange, stats }) {
+  const items = [
+    ["", "All", stats?.total],
+    ["Admitted", "Admitted", stats?.admitted],
+    ["Discharged", "Discharged", stats?.discharged],
+  ];
+  return (
+    <div className="tabs" role="tablist" aria-label="Filter by status">
+      {items.map(([v, label, n]) => (
+        <button key={label} role="tab" aria-selected={value === v} className={value === v ? "tab on" : "tab"} onClick={() => onChange(v)}>
+          {label}<span>{n ?? 0}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -225,27 +256,35 @@ export default function App() {
 
   return (
     <>
-      <header className="top">
-        <div className="wrap top-inner">
+      <header className="hero">
+        <div className="wrap hero-inner">
           <div className="brand">
             <div className="logo"><Icon d={ICONS.logo} size={22} /></div>
-            <div>
-              <h1>Patient admissions</h1>
-              <p>Hospital staff console</p>
-            </div>
+            <span>MediDesk</span>
           </div>
-          <button className="btn primary" disabled={!options} onClick={() => setFormFor({})}><Icon d={ICONS.plus} />Admit<span className="sm-hide">&nbsp;patient</span></button>
+          <button className="btn light" disabled={!options} onClick={() => setFormFor({})}><Icon d={ICONS.plus} />Admit<span className="sm-hide">patient</span></button>
+        </div>
+        <div className="wrap hero-copy">
+          <h1>Patient admissions</h1>
+          <p><Icon d={ICONS.cal} size={16} />{TODAY}</p>
         </div>
       </header>
 
       <main className="wrap">
         <section className="stats" aria-label="Summary">
-          <Stat icon="users" label="Total patients" value={stats?.total} tone="blue" />
-          <Stat icon="bed" label="Currently admitted" value={stats?.admitted} tone="amber" />
-          <Stat icon="out" label="Discharged" value={stats?.discharged} tone="green" />
+          <Stat icon="users" label="Total patients" value={stats?.total} tone="blue" hint="All records" />
+          <Stat icon="bed" label="Currently admitted" value={stats?.admitted} tone="amber" hint={pct(stats?.admitted, stats?.total)} />
+          <Stat icon="out" label="Discharged" value={stats?.discharged} tone="green" hint={pct(stats?.discharged, stats?.total)} />
         </section>
 
         <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Patient list</h2>
+              <p>{loading && patients.length === 0 ? "Loading…" : `${patients.length} ${patients.length === 1 ? "patient" : "patients"} shown`}</p>
+            </div>
+            <Tabs value={filters.status} onChange={(v) => setFilter("status", v)} stats={stats} />
+          </div>
           <div className={`toolbar${hasFilters ? " has-clear" : ""}`} role="search">
             <div className="search-box">
               <Icon d={ICONS.search} size={18} />
@@ -301,11 +340,11 @@ export default function App() {
                       <tr key={p.id}>
                         <td>
                           <div className="who">
-                            <span className="avatar">{initials(p.name)}</span>
+                            <span className="avatar" style={avatarStyle(p.name)}>{initials(p.name)}</span>
                             <div><div className="who-name">{p.name}</div><div className="who-sub">{p.age} yrs, {p.gender}</div></div>
                           </div>
                         </td>
-                        <td>{p.ward}</td>
+                        <td><span className="chip">{p.ward}</span></td>
                         <td>{p.department}</td>
                         <td>{p.doctor}</td>
                         <td className="nowrap">{formatDate(p.admission_date)}</td>
@@ -322,7 +361,7 @@ export default function App() {
                   <li key={p.id} className="card">
                     <div className="card-head">
                       <div className="who">
-                        <span className="avatar">{initials(p.name)}</span>
+                        <span className="avatar" style={avatarStyle(p.name)}>{initials(p.name)}</span>
                         <div><div className="who-name">{p.name}</div><div className="who-sub">{p.age} yrs, {p.gender}</div></div>
                       </div>
                       <Status status={p.status} />
