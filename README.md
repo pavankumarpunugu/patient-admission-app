@@ -2,7 +2,7 @@
 
 Web app for hospital staff to manage admitted patients: add, list, search, filter, edit, delete (with confirmation) and discharge.
 
-**Live link:** https://REPLACE-WITH-YOUR-RENDER-URL.onrender.com
+**Live link:** https://patient-admission-app.onrender.com
 *(free hosting sleeps when idle; the first load can take ~50 seconds)*
 
 ## Tech stack
